@@ -62,7 +62,7 @@ DF['Title'] = all.iloc[:len(DF)]['Title']
 # 處理空值(age)
 for i in range(0,5):
     DF.loc[(DF.Age.isnull()) & (DF.Title == i),'Ti_Age'] = Ti_pred[i]
-train_feature['Ti_Age'] = DF['Ti_Age'].astype('int')
+# train_feature['Ti_Age'] = DF['Ti_Age'].astype('int')
 # 是否小於16歲(小孩)
 train_feature['Ti_Minor'] = ((DF['Ti_Age']) < 16.0) * 1
 
@@ -106,8 +106,7 @@ train_feature['Fare_5'] = le.transform(all.iloc[:len(DF)]['Fare_5'])
 
 # 做Normalization
 scaler = StandardScaler()
-# train_feature['Age'] = scaler.fit_transform(train_feature[['Age']])
-train_feature['Ti_Age'] = scaler.fit_transform(train_feature[['Ti_Age']])
+# train_feature['Ti_Age'] = scaler.fit_transform(train_feature[['Ti_Age']])
 
 # 使用隨機森林來當模型
 Model = RandomForestClassifier(random_state=2,n_estimators=250,min_samples_split=20,oob_score=True)
@@ -142,7 +141,7 @@ test['Title'] = all.iloc[len(DF):]['Title']
 # Filling the missing age
 for i in range(0,5):
     test.loc[(test.Age.isnull()) & (test.Title == i),'Ti_Age'] = Ti_pred[i]
-test_feature['Ti_Age'] = test['Ti_Age'].astype('int')
+# test_feature['Ti_Age'] = test['Ti_Age'].astype('int')
 # 是否小於16歲(小孩)
 test_feature['Ti_Minor'] = ((test['Ti_Age']) < 16.0) * 1
 
@@ -155,25 +154,18 @@ test_feature['Sex'] = test_feature['Sex'].map({'male': 0, 'female': 1}).astype(i
 # test_feature['Family'] = test['Family'].map({'alone': 0, 'small': 1, 'medium': 2, 'large': 3}).astype(int)
 # test_feature = pd.concat([test_feature, pd.get_dummies(test_feature['Family'])], axis=1)
 
-# test['Fare_5'] = pd.qcut(test['Fare'], 5)
-# le_fare2 = LabelEncoder()
 test_feature['Fare_5'] = le.transform(all.iloc[len(DF):]['Fare_5'])
-test_feature[['Ti_Age']] = scaler.transform(test_feature[['Ti_Age']])
-le.fit(all['TitleGroup'])
+# test_feature[['Ti_Age']] = scaler.transform(test_feature[['Ti_Age']])
+# le.fit(all['TitleGroup'])
 # test_feature['TitleGroup'] = le.transform(test['TitleGroup'])
 
 # 預測
 y_pred = Model.predict(test_feature)
 y_pred_mlp = mlp.predict(test_feature)
 
-from sklearn.metrics import accuracy_score
-answer = pd.read_csv('https://raw.githubusercontent.com/johnny12150/yzu_cs_ml_courses/master/CS657%20ML/hw01%20titanic%20PLA/submission.csv')
-
-print(accuracy_score(answer['Survived'], y_pred))
-
 output = pd.DataFrame(
     {'PassengerId': test['PassengerId'],
-     'Survived': y_pred_mlp
+     'Survived': y_pred
     })
 
 # 輸出
