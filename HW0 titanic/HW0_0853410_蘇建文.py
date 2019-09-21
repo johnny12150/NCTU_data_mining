@@ -15,6 +15,7 @@ train_labels = DF['Survived'].copy()
 
 # 處理空值, 用眾數補embarked
 # train_feature['Embarked'] = train_feature['Embarked'].fillna(train_feature['Embarked'].mode()[0])
+all['Fare'] = all['Fare'].fillna(all['Fare'].median())
 
 # 嘗試新feature來增加 model準確度
 # 1. 處理姓名內的稱謂
@@ -74,11 +75,12 @@ DF.loc[DF['FamilySize'] > 6, 'Family'] = 'large'
 # train_feature['Family'] = DF['Family'].map({'alone': 0, 'small': 1, 'medium': 2, 'large': 3}).astype(int)
 
 # 3. 由於票價的全距相當大，故將所有數據依照5個區間分區
-DF['Fare_5'] = pd.qcut(DF['Fare'], 5)
+all['Fare_5'] = pd.qcut(all['Fare'], 5)
 
 # 4. 有相同票的人
 all['Connected_Survival'] = 0.5
 for _, df_grp in all.groupby('Ticket'):
+    # 過濾出重複的票根
     if (len(df_grp) > 1):
         for ind, row in df_grp.iterrows():
             smax = df_grp.drop(ind)['Survived'].max()
@@ -99,7 +101,8 @@ train_feature['Sex'] = train_feature['Sex'].map({'male': 0, 'female': 1}).astype
 le = LabelEncoder()
 le.fit(all['TitleGroup'])
 # train_feature['TitleGroup'] = le.transform(DF['TitleGroup'])
-train_feature['Fare_5'] = le.fit_transform(DF['Fare_5'])
+le.fit(all['Fare_5'])
+train_feature['Fare_5'] = le.transform(all.iloc[:len(DF)]['Fare_5'])
 
 # 做Normalization
 scaler = StandardScaler()
@@ -109,21 +112,19 @@ train_feature['Ti_Age'] = scaler.fit_transform(train_feature[['Ti_Age']])
 # 使用隨機森林來當模型
 Model = RandomForestClassifier(random_state=2,n_estimators=250,min_samples_split=20,oob_score=True)
 Model.fit(train_feature, train_labels)
-
-mlp = MLPClassifier(solver='sgd', activation='relu',alpha=1e-4,hidden_layer_sizes=(50,50), random_state=1,max_iter=10,verbose=10,learning_rate_init=.1)
-mlp.fit(train_feature, train_labels)
-
-# 使用其他模型
-
 # oob採用未被選用的data來做validation
 print('Base oob score :%.5f' %(Model.oob_score_))
+
+# 使用其他模型
+mlp = MLPClassifier(solver='sgd', activation='relu',alpha=1e-4,hidden_layer_sizes=(50,50), random_state=1,max_iter=10,verbose=10,learning_rate_init=.1)
+mlp.fit(train_feature, train_labels)
+print(mlp.score(train_feature, train_labels))
 
 # 處理測試資料
 # fare有空值
 test.loc[ (test['Fare'].isnull()), 'Fare'] = test['Fare'].dropna().median()
 # 選feature
 test_feature = test[['Sex', 'Pclass']].copy()
-# test_feature = test[['Age', 'Sex', 'Embarked', 'Pclass', 'SibSp', 'Parch']].copy()
 # 新特徵
 test['FamilySize'] = test['SibSp'] + test['Parch']
 test.loc[test['FamilySize'] == 0, 'Family'] = 'alone'
@@ -154,9 +155,9 @@ test_feature['Sex'] = test_feature['Sex'].map({'male': 0, 'female': 1}).astype(i
 # test_feature['Family'] = test['Family'].map({'alone': 0, 'small': 1, 'medium': 2, 'large': 3}).astype(int)
 # test_feature = pd.concat([test_feature, pd.get_dummies(test_feature['Family'])], axis=1)
 
-test['Fare_5'] = pd.qcut(test['Fare'], 5)
-le_fare2 = LabelEncoder()
-test_feature['Fare_5'] = le_fare2.fit_transform(test['Fare_5'])
+# test['Fare_5'] = pd.qcut(test['Fare'], 5)
+# le_fare2 = LabelEncoder()
+test_feature['Fare_5'] = le.transform(all.iloc[len(DF):]['Fare_5'])
 test_feature[['Ti_Age']] = scaler.transform(test_feature[['Ti_Age']])
 le.fit(all['TitleGroup'])
 # test_feature['TitleGroup'] = le.transform(test['TitleGroup'])
