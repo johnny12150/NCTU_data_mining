@@ -9,16 +9,11 @@ test = pd.read_csv('test.csv')
 all = DF.append(test)
 
 # 特徵選取
-# train_feature = DF[['Age', 'Sex', 'Embarked', 'Pclass', 'SibSp', 'Parch']].copy()
-train_feature = DF[['Sex', 'Pclass', 'SibSp', 'Parch']].copy()
+# train_feature = DF[['Sex', 'Embarked', 'Pclass', 'SibSp', 'Parch']].copy()
+train_feature = DF[['Sex', 'Pclass']].copy()
 train_labels = DF['Survived'].copy()
 
-# 處理空值
-# median_age = train_feature['Age'].dropna().median()
-# 取出Age是Nan的row後，將該row的Age以平均數取代之
-# train_feature.loc[ (train_feature['Age'].isnull()), 'Age'] = median_age
-
-# 用眾數補embarked
+# 處理空值, 用眾數補embarked
 # train_feature['Embarked'] = train_feature['Embarked'].fillna(train_feature['Embarked'].mode()[0])
 
 # 嘗試新feature來增加 model準確度
@@ -63,7 +58,7 @@ Ti_pred = all.groupby('Title')['Age'].median().values
 DF['Ti_Age'] = DF['Age']
 DF['Title'] = all.iloc[:len(DF)]['Title']
 
-# Filling the missing age
+# 處理空值(age)
 for i in range(0,5):
     DF.loc[(DF.Age.isnull()) & (DF.Title == i),'Ti_Age'] = Ti_pred[i]
 train_feature['Ti_Age'] = DF['Ti_Age'].astype('int')
@@ -80,6 +75,21 @@ DF.loc[DF['FamilySize'] > 6, 'Family'] = 'large'
 
 # 3. 由於票價的全距相當大，故將所有數據依照5個區間分區
 DF['Fare_5'] = pd.qcut(DF['Fare'], 5)
+
+# 4. 有相同票的人
+all['Connected_Survival'] = 0.5
+for _, df_grp in all.groupby('Ticket'):
+    if (len(df_grp) > 1):
+        for ind, row in df_grp.iterrows():
+            smax = df_grp.drop(ind)['Survived'].max()
+            smin = df_grp.drop(ind)['Survived'].min()
+            passID = row['PassengerId']
+            if (smax == 1.0):
+                all.loc[all['PassengerId'] == passID, 'Connected_Survival'] = 1
+            elif (smin==0.0):
+                all.loc[all['PassengerId'] == passID, 'Connected_Survival'] = 0
+
+train_feature['Connected_Survival'] = all.iloc[:len(DF)]['Connected_Survival']
 
 # 處理categorical data，one hot encoding
 # train_feature['Embarked'] = train_feature['Embarked'].map({'C': 0, 'Q': 1, 'S':2}).astype(int)
@@ -112,7 +122,7 @@ print('Base oob score :%.5f' %(Model.oob_score_))
 # fare有空值
 test.loc[ (test['Fare'].isnull()), 'Fare'] = test['Fare'].dropna().median()
 # 選feature
-test_feature = test[['Sex', 'Pclass', 'SibSp', 'Parch']].copy()
+test_feature = test[['Sex', 'Pclass']].copy()
 # test_feature = test[['Age', 'Sex', 'Embarked', 'Pclass', 'SibSp', 'Parch']].copy()
 # 新特徵
 test['FamilySize'] = test['SibSp'] + test['Parch']
@@ -125,10 +135,8 @@ test['Title'] = test['Name'].map(lambda name:name.split(',')[1].split('.')[0].st
 test['TitleGroup'] = test['Title'].map(title_dict)
 test.loc[ (test['TitleGroup'].isnull()), 'TitleGroup'] = test['TitleGroup'].dropna().mode() 
 # 處理空值
-# median_age = test_feature['Age'].dropna().median()
-# test_feature.loc[ (test_feature['Age'].isnull()), 'Age'] = median_age
 test['Ti_Age'] = test['Age']
-test['Title'] = all.iloc[:len(test)]['Title']
+test['Title'] = all.iloc[len(DF):]['Title']
 
 # Filling the missing age
 for i in range(0,5):
@@ -136,6 +144,8 @@ for i in range(0,5):
 test_feature['Ti_Age'] = test['Ti_Age'].astype('int')
 # 是否小於16歲(小孩)
 test_feature['Ti_Minor'] = ((test['Ti_Age']) < 16.0) * 1
+
+test_feature['Connected_Survival'] = all.iloc[len(DF):]['Connected_Survival']
 
 #one hot
 # test_feature['Embarked'] = test_feature['Embarked'].fillna(test_feature['Embarked'].mode()[0])
@@ -162,7 +172,7 @@ print(accuracy_score(answer['Survived'], y_pred))
 
 output = pd.DataFrame(
     {'PassengerId': test['PassengerId'],
-     'Survived': y_pred
+     'Survived': y_pred_mlp
     })
 
 # 輸出
