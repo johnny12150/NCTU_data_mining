@@ -1,5 +1,8 @@
 import pandas as pd
 import numpy as np
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error
 
 # load xls file
 df_pm25 = pd.read_excel('./107年新竹站_20190315.xls')
@@ -25,12 +28,62 @@ df_times_T = (df_times.astype(float).ffill(axis=1) + df_times.astype(float).bfil
 print(df_times_T.isna().sum())
 
 # 1-d. 取10, 11月當training set, 12月當testing set
-# df_train = df_pm25.loc[(df_pm25['date'] >= '2018-10-1') & (df_pm25['date'] <= '2018-11-30')].reset_index(drop=True)
-
 # train共61天
 df_train = df_times_T.iloc[:, :24*61]
 # test為剩下的31天
 df_test = df_times_T.iloc[:, 24*61:]
 
-# 2-a. 每天有18個測項
 
+# 2-a. 取6小時為一單位切割
+def data_generator(df, style):
+    """
+    產生每六小時的時序資料
+    """
+    target_matrix = np.zeros(df.shape[1]-6)
+    # 2-b. 只要PM2.5
+    if style == 'PM2.5':
+        df_matrix = df.iloc[9, :].T
+        feature_matrix = np.zeros((df.shape[1] - 6, 6))
+        for index in range(df.shape[1]-6):
+            feature_matrix[index, :] = df_matrix.values[index:index+6]
+            target_matrix[index] = df_matrix.values[index+6]
+    # 2-b. 18個屬性全要
+    else:
+        df_matrix = df.T
+        feature_matrix = np.zeros((df.shape[1] - 6, 18*6))
+        for index in range(df.shape[1]-6):
+            feature_matrix[index, :] = df_matrix.iloc[index:index+6, :].values.flatten()
+            target_matrix[index] = df.iloc[9, :].T.values[index + 6]
+
+    return feature_matrix, target_matrix
+
+
+def build_models(X, y, testX, testy):
+    mae = []
+    # 2-c. 建模linear regression
+    reg = LinearRegression().fit(X, y)
+    y_pred = reg.predict(testX)
+    # 2-d. 用MAE評估loss
+    mae.append(mean_absolute_error(testy, y_pred))
+
+    # 2-c. 建模random forest
+    rf = RandomForestRegressor(random_state=0, n_estimators=1000, n_jobs=4).fit(X, y)
+    y_pred = rf.predict(testX)
+    # 2-d. 用MAE評估loss
+    mae.append(mean_absolute_error(testy, y_pred))
+
+    return mae
+
+
+# PM2.5
+df_train_ohe, df_train_label = data_generator(df_train, 'PM2.5')
+df_test_ohe, df_test_label = data_generator(df_test, 'PM2.5')
+
+# 兩種模型的準確度
+print(build_models(df_train_ohe, df_train_label, df_test_ohe, df_test_label))
+
+# 18種屬性
+df_train_ohe, df_train_label = data_generator(df_train, '18 attributes')
+df_test_ohe, df_test_label = data_generator(df_test, '18 attributes')
+
+print(build_models(df_train_ohe, df_train_label, df_test_ohe, df_test_label))
