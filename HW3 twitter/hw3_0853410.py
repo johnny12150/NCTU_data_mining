@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 
 def load_data(filename, type):
@@ -21,7 +22,6 @@ def load_data(filename, type):
         if line.rstrip():
             # split the symbol between feature and label
             label = line.split(symbol)[0]
-            print(i)
             comment = line.split(symbol)[1].split('\n')[0]
             twitter_arr.append(comment)
             twitter_label.append(label)
@@ -35,10 +35,39 @@ def load_data(filename, type):
 
 train = load_data('./training_label.txt', 'train')
 test = load_data('./testing_label.txt', 'test')
+
+
 # NLP preprocess
-# sklearn has default English stop word
-vectorizer = CountVectorizer()
-# this may take a while
-X = vectorizer.fit_transform(train['comment'].values)
-# return comment without stop words
-trainX = vectorizer.inverse_transform(X)
+def preprocess(data):
+    # sklearn has default English stop word
+    vectorizer = CountVectorizer()
+    # this may take a while
+    tmp = vectorizer.fit_transform(data)
+    # return comment without stop words
+    tmp = vectorizer.inverse_transform(tmp)
+    # combine array to string/ sentence
+    noStopWord = []
+    for j in tmp:
+        noStopWord.append(' '.join(j))
+
+    tfidf = TfidfVectorizer()
+    word_tf = tfidf.fit_transform(noStopWord)
+    return word_tf
+
+
+trainX = preprocess(train['comment'].values)
+
+
+from xgboost.sklearn import XGBClassifier
+from sklearn import metrics
+
+# XGboost gpu (using sklearn interface), you need to be careful about the size of your VRAM
+# clf = XGBClassifier(tree_method='gpu_hist', gpu_id=0)
+# cpu
+clf = XGBClassifier()
+
+clf.fit(trainX, train['label'], eval_metric='auc')
+print(clf.score(trainX, train['label']))
+# y_pred = clf.predict(trainX)
+# print(metrics.accuracy_score(train['label'], y_pred))
+
