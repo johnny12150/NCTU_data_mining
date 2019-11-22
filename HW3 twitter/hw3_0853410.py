@@ -41,28 +41,36 @@ test = load_data('./testing_label.txt', 'test')
 
 
 # NLP preprocess
-def preprocess(data):
+def preprocess(train, test):
     # sklearn has default English stop word
     vectorizer = CountVectorizer()
     # this may take a while
-    tmp = vectorizer.fit_transform(data)
+    tmp = vectorizer.fit_transform(train)
+    tmp2 = vectorizer.transform(test)
     # return comment without stop words
     tmp = vectorizer.inverse_transform(tmp)
+    tmp2 = vectorizer.inverse_transform(tmp2)
     # combine array to string/ sentence
     noStopWord = []
+    noStopWord2 = []
     for j in tmp:
         noStopWord.append(' '.join(j))
 
+    for j in tmp2:
+        noStopWord2.append(' '.join(j))
+
     tfidf = TfidfVectorizer()
     word_tf = tfidf.fit_transform(noStopWord)
-    return word_tf
+    word_tf2 = tfidf.transform(noStopWord2)
+    return word_tf, word_tf2
 
 
-trainX = preprocess(train['comment'].values)
+trainX, testX = preprocess(train['comment'].values, test['comment'].values)
 
 clf = AdaBoostClassifier(n_estimators=100, random_state=0)  # training acc = 0.719
 clf.fit(trainX, train['label'])
-print(clf.score(trainX, train['label']))
+print("Train Acc: " + str(clf.score(trainX, train['label'])))
+print("Test Acc: " + str(clf.score(testX, test['label'])))
 
 # XGboost gpu (using sklearn interface)
 # you need to be careful about the size of your VRAM (Process finished with exit code -1073740791 (0xC0000409))
