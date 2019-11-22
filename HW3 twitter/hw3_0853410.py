@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
 
 
 def load_data(filename, type):
@@ -35,6 +36,9 @@ def load_data(filename, type):
 train = load_data('./training_label.txt', 'train')
 test = load_data('./testing_label.txt', 'test')
 # NLP preprocess
-
 # sklearn has default English stop word
-
+vectorizer = CountVectorizer()
+# this may take a while
+X = vectorizer.fit_transform(train['comment'].values)
+# return comment without stop words
+trainX = vectorizer.inverse_transform(X)
