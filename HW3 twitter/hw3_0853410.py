@@ -2,6 +2,9 @@ import pandas as pd
 import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+from xgboost.sklearn import XGBClassifier
+from sklearn import metrics
+from sklearn.ensemble import AdaBoostClassifier
 
 
 def load_data(filename, type):
@@ -57,17 +60,25 @@ def preprocess(data):
 
 trainX = preprocess(train['comment'].values)
 
-
-from xgboost.sklearn import XGBClassifier
-from sklearn import metrics
-
-# XGboost gpu (using sklearn interface), you need to be careful about the size of your VRAM
-# clf = XGBClassifier(tree_method='gpu_hist', gpu_id=0)
-# cpu
-clf = XGBClassifier()
-
-clf.fit(trainX, train['label'], eval_metric='auc')
+clf = AdaBoostClassifier(n_estimators=100, random_state=0)  # training acc = 0.719
+clf.fit(trainX, train['label'])
 print(clf.score(trainX, train['label']))
+
+# XGboost gpu (using sklearn interface)
+# you need to be careful about the size of your VRAM (Process finished with exit code -1073740791 (0xC0000409))
+# clf = XGBClassifier(tree_method='gpu_hist', gpu_id=0, n_estimators=100, learning_rate=0.3, max_depth=6)
+# clf.fit(trainX[:1000], train['label'].values[:1000], eval_metric='auc')
+
+# batch train for gpu
+params = {'tree_method': 'gpu_hist', 'gpu_id': 0}
+# https://stackoverflow.com/questions/38079853/how-can-i-implement-incremental-training-for-xgboost
+
+# cpu
+clf = XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=6)  # acc on train = 0.73
+# clf.fit(trainX, train['label'], eval_metric='auc')
+# print(clf.score(trainX, train['label']))
+
+# alternative way of evaluate training accuracy
 # y_pred = clf.predict(trainX)
 # print(metrics.accuracy_score(train['label'], y_pred))
 
