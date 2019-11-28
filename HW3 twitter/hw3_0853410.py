@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.metrics import classification_report
 from xgboost.sklearn import XGBClassifier
 from sklearn import metrics
 from sklearn.ensemble import AdaBoostClassifier
@@ -43,11 +43,11 @@ test = load_data('./testing_label.txt', 'test')
 # NLP preprocess
 def preprocess(train, test):
     # sklearn has default English stop word
-    vectorizer = CountVectorizer()
+    vectorizer = CountVectorizer(stop_words='english')
     # this may take a while
     tmp = vectorizer.fit_transform(train)
     tmp2 = vectorizer.transform(test)
-    # return comment without stop words
+    # return comment without stop words, alternative is using the tfidf_transformer
     tmp = vectorizer.inverse_transform(tmp)
     tmp2 = vectorizer.inverse_transform(tmp2)
     # combine array to string/ sentence
@@ -59,10 +59,16 @@ def preprocess(train, test):
     for j in tmp2:
         noStopWord2.append(' '.join(j))
 
-    tfidf = TfidfVectorizer()
-    word_tf = tfidf.fit_transform(noStopWord)
-    word_tf2 = tfidf.transform(noStopWord2)
+    tfidf = TfidfVectorizer(stop_words='english')
+    word_tf = tfidf.fit_transform(train)
+    word_tf2 = tfidf.transform(test)
     return word_tf, word_tf2
+
+
+def metric_acc(model, x, y):
+    y_pred = model.predict(x)
+    report = classification_report(y, y_pred, output_dict=True)
+    return pd.DataFrame.from_dict(report).T
 
 
 trainX, testX = preprocess(train['comment'].values, test['comment'].values)
@@ -71,6 +77,9 @@ clf = AdaBoostClassifier(n_estimators=100, random_state=0)  # training acc = 0.7
 clf.fit(trainX, train['label'])
 print("Train Acc: " + str(clf.score(trainX, train['label'])))
 print("Test Acc: " + str(clf.score(testX, test['label'])))
+ad_training_result = metric_acc(clf, trainX, train['label'])
+ad_testing_result = metric_acc(clf, testX, test['label'])
+
 
 # XGboost gpu (using sklearn interface)
 # you need to be careful about the size of your VRAM (Process finished with exit code -1073740791 (0xC0000409))
@@ -83,10 +92,11 @@ params = {'tree_method': 'gpu_hist', 'gpu_id': 0}
 
 # cpu
 clf = XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=6)  # acc on train = 0.73
-# clf.fit(trainX, train['label'], eval_metric='auc')
+clf.fit(trainX, train['label'], eval_metric='auc')
 # print(clf.score(trainX, train['label']))
 
 # alternative way of evaluate training accuracy
-# y_pred = clf.predict(trainX)
 # print(metrics.accuracy_score(train['label'], y_pred))
+training_result = metric_acc(clf, trainX, train['label'])
+testing_result = metric_acc(clf, testX, test['label'])
 
