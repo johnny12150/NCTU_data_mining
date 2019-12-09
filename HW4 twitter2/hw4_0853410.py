@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics import classification_report
 from keras.models import Sequential
 from keras.layers.core import Dense, Dropout, Activation, Flatten
@@ -47,12 +47,22 @@ max_length = 30
 
 
 # NLP preprocess
-def preprocess(train, test):
-    # max_features 決定最多幾個字
-    tfidf = TfidfVectorizer(stop_words='english', max_features=1000)
-    word_tf = tfidf.fit_transform(train)
-    word_tf2 = tfidf.transform(test)
-    return word_tf, word_tf2, tfidf.vocabulary_
+def preprocess(train, test, type='stop word'):
+    if type == 'stop word':
+        vectorizer = CountVectorizer(stop_words='english')
+        # this may take a while
+        tmp = vectorizer.fit_transform(train)
+        tmp2 = vectorizer.transform(test)
+        # inverse back to normal words
+        tmp = vectorizer.inverse_transform(tmp)
+        tmp2 = vectorizer.inverse_transform(tmp2)
+        return tmp, tmp2
+    else:
+        # max_features 決定最多幾個字
+        tfidf = TfidfVectorizer(stop_words='english', max_features=1000)
+        word_tf = tfidf.fit_transform(train)
+        word_tf2 = tfidf.transform(test)
+        return word_tf, word_tf2, tfidf.vocabulary_
 
 
 def metric_acc(model, x, y):
@@ -71,8 +81,10 @@ def show_train_history(train_history, train, validation):
     plt.show()
 
 
-trainX = train['comment'].values
-testX = test['comment'].values
+trainX, testX = preprocess(train['comment'], test['comment'])
+# 組回句子
+trainX = np.array([' '.join(x.tolist()) for x in trainX])
+testX = np.array([' '.join(x.tolist()) for x in testX])
 # build dictionary
 tokenizer = Tokenizer(num_words=10000)
 tokenizer.fit_on_texts(trainX)
@@ -84,7 +96,7 @@ trainX_pad = sequence.pad_sequences(trainX_seq, maxlen=max_length)
 testX_pad = sequence.pad_sequences(testX_seq, maxlen=max_length)
 
 # 也可以選擇做TFIDF
-trainX_tfidf, testX_tfidf, words = preprocess(train['comment'].values, test['comment'].values)
+trainX_tfidf, testX_tfidf, words = preprocess(train['comment'].values, test['comment'].values, 'tfidf')
 # 從spare matrix轉回np array
 trainX_tfidf = trainX_tfidf.toarray()
 testX_tfidf = testX_tfidf.toarray()
@@ -120,20 +132,24 @@ model_r, history_r = rnn(trainX_pad, train['label'])
 # 2. LSTM, 使用gpu版
 def lstm(x, y, emb=1):
     model_LSTM = Sequential()
-    model_LSTM.add(CuDNNLSTM(32, input_shape=trainX.shape[1:], return_sequences=True))
+    if emb:
+        model_LSTM.add(Embedding(output_dim=128, input_dim=len(tokenizer.word_index), input_length=max_length))
+        model_LSTM.add(CuDNNLSTM(32, return_sequences=True))
+    else:
+        model_LSTM.add(CuDNNLSTM(32, input_shape=trainX.shape[1:], return_sequences=True))
     model_LSTM.add(Dropout(0.4))
-    # model_LSTM.add(CuDNNLSTM(32, return_sequences=True))
     # model_LSTM.add(CuDNNLSTM(32, return_sequences=True))
     model_LSTM.add(CuDNNLSTM(32, return_sequences=False))
     model_LSTM.add(Dense(units=50, activation='relu'))
     model_LSTM.add(Dropout(0.4))
     model_LSTM.add(Dense(units=1, activation='sigmoid'))
-    model_LSTM.summary()
+    print(model_LSTM.summary())
     model_LSTM.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-    train_history_LSTM = model_LSTM.fit(trainX, train['label'], batch_size=10, epochs=10, verbose=2, validation_split=0.2)
+    train_history_LSTM = model_LSTM.fit(x, y, batch_size=200, epochs=10, verbose=2, validation_split=0.2)
     show_train_history(train_history_LSTM, 'loss', 'val_loss')
     show_train_history(train_history_LSTM, 'accuracy', 'val_accuracy')
 
+    return model_LSTM, train_history_LSTM
 
 model_ls, history_ls = lstm(trainX_pad, train['label'])
 # 多層LSTM會出現錯誤, https://github.com/keras-team/keras/issues/12206
