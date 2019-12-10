@@ -43,7 +43,7 @@ def load_data(filename, type):
 
 train = load_data('./training_label.txt', 'train')
 test = load_data('./testing_label.txt', 'test')
-max_length = 30
+max_length = 10
 
 
 # NLP preprocess
@@ -91,6 +91,8 @@ tokenizer.fit_on_texts(trainX)
 print(len(tokenizer.word_index))
 trainX_seq = tokenizer.texts_to_sequences(trainX)
 testX_seq = tokenizer.texts_to_sequences(testX)
+# 計算去除stop word後句子的平均長度
+print(sum([len(x) for x in trainX_seq])/ len(trainX_seq))
 # padding
 trainX_pad = sequence.pad_sequences(trainX_seq, maxlen=max_length)
 testX_pad = sequence.pad_sequences(testX_seq, maxlen=max_length)
@@ -113,6 +115,8 @@ def rnn(x, y, emb=1):
         model_RNN.add(Embedding(output_dim=128, input_dim=len(tokenizer.word_index), input_length=max_length))
     else:
         model_RNN.add(SimpleRNN(64, input_shape=trainX.shape[1:], return_sequences=True))  # return_sequences = True 才能疊多層RNN
+    model_RNN.add(SimpleRNN(60, return_sequences=True))
+    model_RNN.add(Dropout(0.7))
     model_RNN.add(SimpleRNN(30))
     model_RNN.add(Dense(units=32, activation='relu'))
     model_RNN.add(Dense(units=1, activation='sigmoid'))
@@ -125,6 +129,10 @@ def rnn(x, y, emb=1):
 
 
 model_r, history_r = rnn(trainX_pad, train['label'])
+print(model_r.evaluate(testX_pad, test['label']))
+# baseline acc
+print(np.sum(test['label'].values.astype(int))/ 90)
+
 # TFIDF維度過大容易導致ram爆炸且一個epoch要三小時
 # model_r2 = rnn(trainX_tfidf, train['label'], 0)
 
@@ -151,5 +159,7 @@ def lstm(x, y, emb=1):
 
     return model_LSTM, train_history_LSTM
 
+
 model_ls, history_ls = lstm(trainX_pad, train['label'])
+print(model_ls.evaluate(testX_pad, test['label']))
 # 多層LSTM會出現錯誤, https://github.com/keras-team/keras/issues/12206
