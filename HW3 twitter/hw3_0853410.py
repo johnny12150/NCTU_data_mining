@@ -73,13 +73,15 @@ def metric_acc(model, x, y):
 
 trainX, testX = preprocess(train['comment'].values, test['comment'].values)
 
-clf = AdaBoostClassifier(n_estimators=100, random_state=0)  # training acc = 0.719
-clf.fit(trainX, train['label'])
-print("Train Acc: " + str(clf.score(trainX, train['label'])))
-print("Test Acc: " + str(clf.score(testX, test['label'])))
-ad_training_result = metric_acc(clf, trainX, train['label'])
-ad_testing_result = metric_acc(clf, testX, test['label'])
-
+est = [50, 100, 150, 200, 300, 400, 500]
+for k in est:
+    clf = AdaBoostClassifier(n_estimators=k, random_state=0)  # training acc = 0.719
+    clf.fit(trainX, train['label'])
+    ad_training_result = metric_acc(clf, trainX, train['label'])
+    ad_testing_result = metric_acc(clf, testX, test['label'])
+    print(clf.score(trainX, train['label']))
+    print(clf.score(testX, test['label']))
+    print('--'*6)
 
 # XGboost gpu (using sklearn interface)
 # you need to be careful about the size of your VRAM (Process finished with exit code -1073740791 (0xC0000409))
@@ -90,13 +92,13 @@ ad_testing_result = metric_acc(clf, testX, test['label'])
 params = {'tree_method': 'gpu_hist', 'gpu_id': 0}
 # https://stackoverflow.com/questions/38079853/how-can-i-implement-incremental-training-for-xgboost
 
-# cpu
-clf = XGBClassifier(n_estimators=100, learning_rate=0.1, max_depth=6)  # acc on train = 0.73
-clf.fit(trainX, train['label'], eval_metric='auc')
-# print(clf.score(trainX, train['label']))
-
-# alternative way of evaluate training accuracy
-# print(metrics.accuracy_score(train['label'], y_pred))
-training_result = metric_acc(clf, trainX, train['label'])
-testing_result = metric_acc(clf, testX, test['label'])
+est = [50, 100, 150, 200, 300, 400, 500]
+for k in est:
+    clf = XGBClassifier(n_estimators=k, learning_rate=0.1, max_depth=6)  # acc on train = 0.73
+    clf.fit(trainX, train['label'], eval_metric='auc')
+    print(clf.score(trainX, train['label']))
+    print(clf.score(testX, test['label']))
+    training_result = metric_acc(clf, trainX, train['label'])
+    testing_result = metric_acc(clf, testX, test['label'])
+    print('--'*6)
 
