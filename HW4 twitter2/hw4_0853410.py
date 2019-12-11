@@ -1,10 +1,13 @@
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+# from keras.utils.vis_utils import plot_model
+# import graphviz
+# import os
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.metrics import classification_report
 from keras.models import Sequential
-from keras.layers.core import Dense, Dropout, Activation, Flatten
+from keras.layers.core import Dense, Dropout
 from keras.layers.recurrent import SimpleRNN
 from keras.layers import CuDNNLSTM
 from keras.layers.embeddings import Embedding
@@ -43,6 +46,7 @@ def load_data(filename, type):
 
 train = load_data('./training_label.txt', 'train')
 test = load_data('./testing_label.txt', 'test')
+# os.environ["PATH"] += os.pathsep + 'C:/Users/Wade/Anaconda3/Library/bin/graphviz'
 max_length = 10
 
 
@@ -121,6 +125,7 @@ def rnn(x, y, emb=1):
     model_RNN.add(Dense(units=32, activation='relu'))
     model_RNN.add(Dense(units=1, activation='sigmoid'))
     print(model_RNN.summary())
+    # plot_model(model_RNN, to_file='model_RNN.png', show_shapes=True)
     model_RNN.compile(loss='binary_crossentropy', optimizer='adam', metrics=['acc'])
     train_history_RNN = model_RNN.fit(x, y, batch_size=100, epochs=10, verbose=2, validation_split=0.2)
     show_train_history(train_history_RNN, 'loss', 'val_loss')
@@ -152,6 +157,7 @@ def lstm(x, y, emb=1):
     model_LSTM.add(Dropout(0.4))
     model_LSTM.add(Dense(units=1, activation='sigmoid'))
     print(model_LSTM.summary())
+    # plot_model(model_LSTM, to_file='model_LSTM.png', show_shapes=True)
     model_LSTM.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     train_history_LSTM = model_LSTM.fit(x, y, batch_size=200, epochs=10, verbose=2, validation_split=0.2)
     show_train_history(train_history_LSTM, 'loss', 'val_loss')
