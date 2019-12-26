@@ -71,27 +71,30 @@ labelpointRDD = lines.map(lambda r: LabeledPoint(extract_label(r), extract_featu
 
 # 以randomSplit隨機方式，依照3：1 (75％：25％) 比例，將資料分為train set與test set
 (trainData, testData) = labelpointRDD.randomSplit([3, 1])
-print(testData.count())
+# print(testData.count())
 
 # 為加快程式的執行效率，將train set與test set暫存在記憶體中
 trainData.persist()
 testData.persist()
 
-# 使用Spark MLlib支援的決策樹
-model = DecisionTree.trainClassifier(trainData, numClasses=2, categoricalFeaturesInfo={},impurity="entropy", maxDepth=5, maxBins=5)
-# 使用model.predict對testDat作預測
-score = model.predict(testData.map(lambda p: p.features))
-# 印出預測的結果
-score.foreach(print)
-print(score.collect())  # all
-print(score.take(2))  # first two
-print(score.count())  # 有幾筆
-# 將預測結果與真實label結合起來
-scoreAndLabels = score.zip(testData.map(lambda p: p.label))
-# 使用MulticlassMetrics做出confusionMatrix，計算Accuracy，Recall，Precision
-metrics = MulticlassMetrics(scoreAndLabels)
-print(metrics.confusionMatrix())
-print("Accuracy = %s" % metrics.accuracy)
-print("Recall = %s" % metrics.recall(0))
-print("Precision = %s" % metrics.precision(0))
+# tune參數
+params = [5, 10, 15, 20]
+for i in params:
+    # 使用Spark MLlib支援的決策樹
+    model = DecisionTree.trainClassifier(trainData, numClasses=2, categoricalFeaturesInfo={}, impurity="entropy", maxDepth=i, maxBins=15)
+    # 使用model.predict對testDat作預測
+    score = model.predict(testData.map(lambda p: p.features))
+    # 印出預測的結果
+    # score.foreach(print)
+    print(score.collect())  # all
+    # print(score.take(2))  # first two
+    # print(score.count())  # 有幾筆
+    # 將預測結果與真實label結合起來
+    scoreAndLabels = score.zip(testData.map(lambda p: p.label))
+    # 使用MulticlassMetrics做出confusionMatrix，計算Accuracy，Recall，Precision
+    metrics = MulticlassMetrics(scoreAndLabels)
+    print(metrics.confusionMatrix())
+    print("Accuracy = %s" % metrics.accuracy)
+    print("Recall = %s" % metrics.recall(0))
+    print("Precision = %s" % metrics.precision(0))
 
