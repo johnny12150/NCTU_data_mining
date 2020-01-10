@@ -16,19 +16,21 @@ from attention import Position_Embedding, Attention
 import graphviz
 import os
 
-max_length = 30
+max_length = 150
 
 arxiv = pd.read_csv('data/task2_trainset.csv')
 
 feature = arxiv['Title']
 feature2 = arxiv['Abstract']
+feature3 = arxiv['Title']+arxiv['Abstract'].apply(lambda x: x.replace('$', ''))  # use both abstract and title as feature
 target = arxiv['Task 2'].apply(lambda x: x.split()[0])
+# target = arxiv['Task 2']  # multi-class target
 target2 = arxiv['Categories'].apply(lambda x: x.split('/')[0])
 print(target.value_counts().index)
 print(target2.value_counts().index)
 le = LabelEncoder()
 target = le.fit_transform(target)
-X_train, X_test, y_train, y_test = train_test_split(feature, target, test_size=0.33, random_state=42)
+X_train, X_test, y_train, y_test = train_test_split(feature3, target, test_size=0.33, random_state=42)
 
 
 def preprocess(train, test, max_feature=3000, stop_word=True):
@@ -45,16 +47,39 @@ def preprocess(train, test, max_feature=3000, stop_word=True):
     return tmp, tmp2
 
 
+def load_golve(token, save=False):
+    # https://medium.com/@sarin.samarth07/glove-word-embeddings-with-keras-python-code-52131b0c8b1d
+    # use golve pre-train embedding
+    embedding_vector = {}
+    f = open('glove.840B.300d.txt', encoding='utf8')
+    for line in f:
+        value = line.split(' ')
+        word = value[0]
+        coef = np.array(value[1:], dtype='float32')
+        embedding_vector[word] = coef
+    f.close()
+    embedding_matrix = np.zeros((len(token.word_index)+1, 300))
+    for word, i in token.word_index.items():
+        embedding_value = embedding_vector.get(word)
+        if embedding_value is not None:
+            embedding_matrix[i] = embedding_value
+    if save:
+        np.save('golve_emb.npy', embedding_matrix)
+    return embedding_matrix
+
+
 X_train, X_test = preprocess(X_train, X_test, 8000)
 # 組回句子
 X_train = np.array([' '.join(x.tolist()) for x in X_train])
 X_test = np.array([' '.join(x.tolist()) for x in X_test])
 # build dictionary
-tokenizer = Tokenizer(num_words=10000)
+tokenizer = Tokenizer(num_words=30000)
 tokenizer.fit_on_texts(X_train)
 # word to sequence
 trainX_seq = tokenizer.texts_to_sequences(X_train)
 testX_seq = tokenizer.texts_to_sequences(X_test)
+# emb_matrix = load_golve(tokenizer)
+emb_matrix = np.load('golve_emb.npy')
 # padding
 trainX_pad = sequence.pad_sequences(trainX_seq, maxlen=max_length)
 testX_pad = sequence.pad_sequences(testX_seq, maxlen=max_length)
@@ -115,9 +140,12 @@ def gru(plot=False, classes=4):
     return model_GRU
 
 
-def CNN_1d(plot=False, classes=4):
+def CNN_1d(plot=False, classes=4, pretrain=True):
     model_CNN = Sequential()
-    model_CNN.add(Embedding(output_dim=64, input_dim=len(tokenizer.word_index), input_length=max_length))
+    if pretrain:
+        model_CNN.add(Embedding(output_dim=300, input_dim=len(tokenizer.word_index)+1, input_length=max_length, weights=[emb_matrix], trainable=False))
+    else:
+        model_CNN.add(Embedding(output_dim=64, input_dim=len(tokenizer.word_index), input_length=max_length))
     model_CNN.add(Conv1D(64, 5, activation='relu'))
     model_CNN.add(MaxPooling1D())
     model_CNN.add(Conv1D(64, 5, activation='relu'))
@@ -129,27 +157,31 @@ def CNN_1d(plot=False, classes=4):
     return model_CNN
 
 
-def transformer(classes=4):
+def transformer(classes=4, pretrain=True):
     S_inputs = Input(shape=(None,), dtype='int32')
-    embeddings = Embedding(len(tokenizer.word_index), 128)(S_inputs)
-    embeddings = Position_Embedding()(embeddings)  # 增加Position_Embedding能轻微提高准确率
-    O_seq = Attention(8, 16)([embeddings, embeddings, embeddings])
+    if pretrain:
+        embeddings = Embedding(len(tokenizer.word_index), 128)(S_inputs)
+        embeddings = Position_Embedding()(embeddings)  # 增加Position_Embedding能轻微提高准确率
+    else:
+        embeddings = Embedding(output_dim=300, input_dim=len(tokenizer.word_index) + 1, input_length=max_length,
+                  weights=[emb_matrix], trainable=False)
+    O_seq = Attention(32, 64)([embeddings, embeddings, embeddings])
     O_seq = GlobalAveragePooling1D()(O_seq)
     O_seq = Dropout(0.5)(O_seq)
-    O_seq = Dense(units=50, activation='relu')(O_seq)
+    O_seq = Dense(units=200, activation='relu')(O_seq)
     outputs = Dense(classes, activation='softmax')(O_seq)
     model = Model(inputs=S_inputs, outputs=outputs)
     model.summary()
     return model
 
 
-# model = rnn()
-# model = lstm()
-# model = gru()
-# model = CNN_1d()
-model = transformer()  # keras必須在2.1.6以前，之後API有改會報錯
+# model = rnn(classes=len(list(le.classes_)))
+# model = lstm(classes=len(list(le.classes_)))
+# model = gru(classes=len(list(le.classes_)))
+# model = CNN_1d(classes=len(list(le.classes_)))
+model = transformer(classes=len(list(le.classes_)))  # keras必須在2.1.6以前，之後API有改會報錯
 model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['acc'])
-train_history = model.fit(trainX_pad, y_train, batch_size=30, epochs=30, verbose=2, validation_split=0.2)
+train_history = model.fit(trainX_pad, y_train, batch_size=30, epochs=10, verbose=2, validation_split=0.2)
 show_train_history(train_history, 'loss', 'val_loss')
 show_train_history(train_history, 'acc', 'val_acc')
 print(model.evaluate(testX_pad, y_test))
