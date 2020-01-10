@@ -13,6 +13,7 @@ from keras.layers import CuDNNLSTM, GRU, Conv1D, GlobalMaxPooling1D, MaxPooling1
 from keras.layers.embeddings import Embedding
 from keras.utils.vis_utils import plot_model
 from attention import Position_Embedding, Attention
+from sklearn.metrics import roc_curve, auc
 import graphviz
 import os
 
@@ -177,9 +178,9 @@ def transformer(classes=4, pretrain=True):
 
 # model = rnn(classes=len(list(le.classes_)))
 # model = lstm(classes=len(list(le.classes_)))
-# model = gru(classes=len(list(le.classes_)))
+model = gru(classes=len(list(le.classes_)))
 # model = CNN_1d(classes=len(list(le.classes_)))
-model = transformer(classes=len(list(le.classes_)))  # keras必須在2.1.6以前，之後API有改會報錯
+# model = transformer(classes=len(list(le.classes_)))  # keras必須在2.1.6以前，之後API有改會報錯
 model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['acc'])
 train_history = model.fit(trainX_pad, y_train, batch_size=30, epochs=10, verbose=2, validation_split=0.2)
 show_train_history(train_history, 'loss', 'val_loss')
@@ -187,4 +188,29 @@ show_train_history(train_history, 'acc', 'val_acc')
 print(model.evaluate(testX_pad, y_test))
 
 
+def roc(pred, label, classes=len(list(le.classes_))):
+    pred_df = pd.get_dummies(pred).values
+    y_le_df = pd.get_dummies(label).values
+    fpr = dict()
+    tpr = dict()
+    roc_auc = dict()
 
+    for i in range(classes):
+        fpr[i], tpr[i], threshold = roc_curve(y_le_df[:, i], pred_df[:, i])
+        roc_auc[i] = auc(fpr[i], tpr[i])
+
+    for i in range(classes):
+        fig = plt.figure()
+        lw = 2
+        plt.plot(fpr[i], tpr[i], color='darkorange', lw=lw, label='ROC curve (area = %0.2f)' % roc_auc[i])
+        plt.plot([0, 1], [0, 1], color='navy', lw=lw, linestyle='--')
+        plt.xlabel('False Positive Rate')
+        plt.ylabel('True Positive Rate')
+        plt.title('Receiver operating characteristic, Class="{}"'.format(list(le.classes_)[i]))
+        plt.legend(loc="lower right")
+        plt.show()
+
+
+test_pred = model.predict_classes(testX_pad)
+print(pd.crosstab(y_test, test_pred, rownames=['Label'], colnames=['Predict']))
+roc(test_pred, y_test)
