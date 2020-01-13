@@ -18,6 +18,7 @@ import graphviz
 import os
 
 max_length = 150
+os.environ["PATH"] += os.pathsep + 'C:/Users/Wade/Anaconda3/Library/bin/graphviz'
 
 arxiv = pd.read_csv('data/task2_trainset.csv')
 
@@ -86,13 +87,14 @@ trainX_pad = sequence.pad_sequences(trainX_seq, maxlen=max_length)
 testX_pad = sequence.pad_sequences(testX_seq, maxlen=max_length)
 
 
-def show_train_history(train_history, train, validation):
+def show_train_history(train_history, train, validation, dir):
     plt.plot(train_history.history[train])
     plt.plot(train_history.history[validation])
     plt.title('Train History')
     plt.ylabel(train)
     plt.xlabel('Epoch')
     plt.legend(['train', 'validation'])
+    plt.savefig('result/model'+str(dir)+'/Train_'+train+'.png')
     plt.show()
 
 
@@ -158,7 +160,7 @@ def CNN_1d(plot=False, classes=4, pretrain=True):
     return model_CNN
 
 
-def transformer(classes=4, pretrain=True):
+def transformer(classes=4, plot=False, pretrain=True):
     S_inputs = Input(shape=(None,), dtype='int32')
     if pretrain:
         embeddings = Embedding(len(tokenizer.word_index), 128)(S_inputs)
@@ -173,22 +175,12 @@ def transformer(classes=4, pretrain=True):
     outputs = Dense(classes, activation='softmax')(O_seq)
     model = Model(inputs=S_inputs, outputs=outputs)
     model.summary()
+    if plot:
+        plot_model(model, to_file='model_attention.png', show_shapes=True)
     return model
 
 
-# model = rnn(classes=len(list(le.classes_)))
-# model = lstm(classes=len(list(le.classes_)))
-model = gru(classes=len(list(le.classes_)))
-# model = CNN_1d(classes=len(list(le.classes_)))
-# model = transformer(classes=len(list(le.classes_)))  # keras必須在2.1.6以前，之後API有改會報錯
-model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['acc'])
-train_history = model.fit(trainX_pad, y_train, batch_size=30, epochs=10, verbose=2, validation_split=0.2)
-show_train_history(train_history, 'loss', 'val_loss')
-show_train_history(train_history, 'acc', 'val_acc')
-print(model.evaluate(testX_pad, y_test))
-
-
-def roc(pred, label, classes=len(list(le.classes_))):
+def roc(pred, label, dir, classes=len(list(le.classes_))):
     pred_df = pd.get_dummies(pred).values
     y_le_df = pd.get_dummies(label).values
     fpr = dict()
@@ -208,9 +200,36 @@ def roc(pred, label, classes=len(list(le.classes_))):
         plt.ylabel('True Positive Rate')
         plt.title('Receiver operating characteristic, Class="{}"'.format(list(le.classes_)[i]))
         plt.legend(loc="lower right")
+        plt.savefig('result/model' + str(dir) + '/ROC_' + list(le.classes_)[i] + '.png')
         plt.show()
 
 
-test_pred = model.predict_classes(testX_pad)
-print(pd.crosstab(y_test, test_pred, rownames=['Label'], colnames=['Predict']))
-roc(test_pred, y_test)
+result = []
+model_name = ['RNN', 'GRU', '1D_CNN', 'Transformer']
+for i, m in enumerate(model_name):
+    if i == 0:
+        model = rnn(classes=len(list(le.classes_)))
+    if i == 3:
+        # model = transformer(classes=len(list(le.classes_)))  # keras必須在2.1.6以前，之後API有改會報錯
+        model = lstm(classes=len(list(le.classes_)))
+    if i == 1:
+        model = gru(classes=len(list(le.classes_)))
+    if i == 2:
+        model = CNN_1d(classes=len(list(le.classes_)))
+    model.compile(loss='sparse_categorical_crossentropy', optimizer='adam', metrics=['acc'])
+    train_history = model.fit(trainX_pad, y_train, batch_size=30, epochs=10, verbose=0, validation_split=0.2)
+    show_train_history(train_history, 'loss', 'val_loss', i)
+    show_train_history(train_history, 'acc', 'val_acc', i)
+    tmp = model.evaluate(testX_pad, y_test, verbose=0)
+    result.append(tmp.extend(model_name[i]))
+
+    # functional API沒有 predict_class
+    if i == 3:
+        y_prob = model.predict(testX_pad)
+        test_pred = y_prob.argmax(axis=-1)
+    else:
+        test_pred = model.predict_classes(testX_pad)
+    print(pd.crosstab(y_test, test_pred, rownames=['Label'], colnames=['Predict']))
+    roc(test_pred, y_test, i)
+
+# print(pd.DataFrame(result, columns=['Loss', 'Accuracy', 'Model']))
